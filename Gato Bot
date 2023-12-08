@@ -1,0 +1,78 @@
+import creds 
+import discord
+
+from discord.ext import commands
+
+#imports for firestore database
+import firebase_admin
+from firebase_admin import firestore
+from firebase_admin import credentials
+
+cred = credentials.Certificate("gato-points-firebase-adminsdk-d3vhp-1fb49e8c4b.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+gpRate = 5
+
+
+# bot = commands.Bot(commands_prefix = '!')
+
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+
+@bot.event
+async def on_ready():
+    print(f'Gato has arrived!')
+
+@bot.command()
+async def addGP(ctx):
+    userPoints = db.collection(u'Users').document(ctx.author.name)
+    userPoints.update({'Amount':firestore.Increment(1)})
+    await ctx.send("Added 1 GP to " + ctx.author.Member)
+
+@bot.command()
+async def removeGP(ctx, subGP: int):
+    # needs try/catch for invalid operations
+    # needs graceful response for those who hit 0 GP
+    userPoints = db.collection(u'Users').document(ctx.author.name)
+    userPoints.update({'Amount':firestore.Increment(-subGP)})
+    await ctx.send(f'Removed {subGP} from {ctx.author.name}.')
+
+@bot.command()
+async def setGP(ctx, newGP: int):
+    userPoints = db.collection(u'Users').document(ctx.author.name)
+    userPoints.set({'Amount': newGP})
+    await ctx.send(f'Set GP to {newGP} for {ctx.author.name}.')
+
+@bot.command()
+async def myGP(ctx): # shows amount of GP user owns
+    userPoints = db.collection(u'Users').document(str(ctx.author.name)).get().get('Amount')
+    await ctx.send("GP: " + str(userPoints))
+
+@bot.command()
+async def globalGPIncrementer(ctx):
+    Users = db.collection(u'Users').stream()
+    for user in Users:
+        userPoints = db.collection(u'Users').document(user.id)
+        userPoints.update({'Amount':firestore.Increment(gpRate)})
+    await ctx.send('Globally updated Users Gp by 5')
+
+@bot.command()
+async def addUser(ctx): # adds those who use this command to the firebase database
+    user = db.collection(u'Users').document(str(ctx.author.name)).get()
+    user_data = db.collection(u'Users').document(str(ctx.author.name))
+    if not user.exists:
+        data = {
+            u'Amount': 0 
+        }
+
+        user_data.set(data)
+    await ctx.send(f"Added {ctx.author.name}")
+
+# @bot.listen()
+# responds on any message
+# async def on_message(message):
+#     if message.author==bot.user:
+#         return
+#     await message.channel.send(f'{message.content}')
+
+bot.run(creds.TOKEN)
