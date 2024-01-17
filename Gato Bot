@@ -1,18 +1,18 @@
 import creds 
 import discord
-
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 #imports for firestore database
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
+from datetime import datetime
 
 cred = credentials.Certificate("gato-points-firebase-adminsdk-d3vhp-1fb49e8c4b.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-gpRate = 5
+globalGPRate = 10
 
 
 # bot = commands.Bot(commands_prefix = '!')
@@ -21,6 +21,7 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 @bot.event
 async def on_ready():
+    GPIncrementor2.start()
     print(f'Gato has arrived!')
 
 @bot.command()
@@ -54,7 +55,7 @@ async def globalGPIncrementer(ctx):
     for user in Users:
         userPoints = db.collection(u'Users').document(user.id)
         userPoints.update({'Amount':firestore.Increment(gpRate)})
-    await ctx.send('Globally updated Users Gp by 5')
+    # await ctx.send('Globally updated Users Gp by 5')
 
 @bot.command()
 async def addUser(ctx): # adds those who use this command to the firebase database
@@ -67,7 +68,80 @@ async def addUser(ctx): # adds those who use this command to the firebase databa
 
         user_data.set(data)
     await ctx.send(f"Added {ctx.author.name}")
+    
+@bot.command()
+async def addServerUsers(ctx): # adds Server Members to the firebase database WIP
+    user = db.collection(u'Users').document(str(ctx.author.name)).get()
+    user_data = db.collection(u'Users').document(str(ctx.author.name))
+    if not user.exists:
+        data = {
+            u'Amount': 0, 
+            u'Modifier': 1.0,
+        }
+        user_data.set(data)
+        custom_timestamp = datetime(2023, 12, 25, 15, 40, 5)    
+        subData = {
+            u'rate': 5,
+            u'Expires': (str(custom_timestamp)), 
+        } 
+        user_data.collection(u'AdditionalRates').document(u'Award1').set(subData)
+        
+    await ctx.send(f"Added {ctx.author.name}")
 
+@bot.command()
+async def test(ctx):
+    user = db.collection(u'Users').document(str(ctx.author.name))
+    AdditionalRatesRef = user.collection(u'AdditionalRates')
+    Award1Ref = AdditionalRatesRef.document(u'Award1')
+    Award1Snap = Award1Ref.get()
+    ExpiresString = str(Award1Snap.get(u'Expires'))
+    timestamp = datetime.fromisoformat(ExpiresString)
+    timestampFormatted = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    print(timestampFormatted)
+    await ctx.send(timestampFormatted)
+
+@bot.command()
+async def test2(ctx):
+    timestamp_string = "2023-12-25 15:40:05.458000+00:00"
+    # timestamp = datetime.datetime(2024, 5, 20)  
+    # formatted_timestamp = timestamp.strftime("%Y, %m, %d, %H, %M, %S")
+    timestamp = datetime.now()
+    print("Formatted Timestamp:", timestamp)
+    AdditionalRatesRef = db.collection(u'Users').document(user.id).get('AdditionalRates').stream
+    # currentTime = datetime.now()
+    # await ctx.send(timestamp)
+
+def calcGPtobeAdded(GPRate, Modifier, AdditionalRates):
+    FinalGPRate = (GPRate + AdditionalRates) * Modifier
+    return FinalGPRate
+
+@tasks.loop(seconds = 5.0)
+async def GPIncrementor2():
+    Users = db.collection(u'Users').stream()
+    for user in Users:
+        userRef = db.collection(u'Users').document(user.id)
+        GPRate = globalGPRate
+        Modifier = userRef.get().get('Modifier')
+        AdditionalRatesRef = userRef.collection('AdditionalRates').stream()
+        for Award in AdditionalRatesRef:
+            print(Award.get('rate'))
+        # for Award in AdditionalRatesRef: 
+        #     # AwardRef = 
+        #     AdditionalRates = Award.get().get('rate')
+        # GPtobeAdded = calcGPtobeAdded(GPRate, Modifier, AdditionalRates)
+        # user.update({'Amount':firestore.Increment(GPtobeAdded)})
+         
+        
+        
+@tasks.loop(seconds = 5.0)
+async def GPIncrementor():
+    Users = db.collection(u'Users').stream()
+    for user in Users:
+        userPoints = db.collection(u'Users').document(user.id)
+        userPoints.update({'Amount':firestore.Increment(globalGPRate)})
+
+
+        
 # @bot.listen()
 # responds on any message
 # async def on_message(message):
